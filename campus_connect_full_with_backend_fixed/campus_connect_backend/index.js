@@ -14,10 +14,14 @@ const MONGO_URI =
 // ---------- MIDDLEWARE ----------
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: [
+      "http://localhost:3000",
+      "https://bavinan-campus-connect.vercel.app"
+    ],
     credentials: true,
   })
 );
+
 app.use(express.json());
 
 // ---------- MONGOOSE MODELS ----------
