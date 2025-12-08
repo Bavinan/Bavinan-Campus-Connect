@@ -339,15 +339,17 @@ const registerUser = async (userData: Omit<User, "id">) => {
 });
 
     if (!res.ok) {
-      const text = await res.text();
+      //const text = await res.text();
       console.error("Register failed:", text);
-      throw new Error("Failed to register user on server");
+      //throw new Error("Failed to register user on server");
+      return;
     }
 
     const created: User = await res.json(); // backend returns saved user
     // Update React state with the user from DB (has correct id)
-    setUsers((prev) => [...prev, created]);
+    setUsers((prev) => [...prev, createdUser]);
   } catch (err) {
+    console.error("Register error:", err);
     //console.error("Error while registering user:", err);
     //alert("Could not register user in backend. Check server console.");
   }
