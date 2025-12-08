@@ -332,11 +332,11 @@ const registerUser = async (userData: Omit<User, "id">) => {
   try {
     // CALL YOUR BACKEND REGISTER ENDPOINT
     // If your route is different (e.g. /api/users), change the URL here.
-    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(userData),
-    });
+   const res = await fetch(`${API_BASE_URL}/api/users`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(userData),
+});
 
     if (!res.ok) {
       const text = await res.text();
