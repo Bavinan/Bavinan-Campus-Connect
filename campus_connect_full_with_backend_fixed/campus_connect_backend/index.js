@@ -11,21 +11,10 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI =
   process.env.MONGO_URI || "mongodb://127.0.0.1:27017/campus_connect";
 
-// ---------- MONGODB CONNECTION ----------
-const mongoose = require("mongoose");
-
-mongoose
-  .connect(MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => console.log("✅ MongoDB connected"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
-
 // ---------- MIDDLEWARE ----------
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
     credentials: true,
   })
 );
@@ -70,7 +59,6 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// simple placeholders for posts/materials/groups so fetchAll works
 const groupSchema = new mongoose.Schema(
   {
     id: { type: Number, unique: true },
@@ -137,7 +125,7 @@ app.get("/", (req, res) => {
   res.send("Campus Connect backend is running ✅");
 });
 
-// ---------- AUTH LOGIN ----------
+// AUTH LOGIN
 app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -159,9 +147,7 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// ---------- USERS ----------
-
-// Get all users
+// USERS
 app.get("/api/users", async (req, res) => {
   try {
     const users = await User.find().lean();
@@ -172,12 +158,9 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
-// Register new user (used by Admin Register page)
 app.post("/api/users", async (req, res) => {
   try {
     const body = req.body;
-
-    // generate numeric id if not provided
     const numericId = body.id || Date.now();
 
     const user = new User({
@@ -203,7 +186,6 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
-// Update user (toggle active, etc.)
 app.put("/api/users/:id", async (req, res) => {
   try {
     const id = Number(req.params.id);
@@ -222,9 +204,7 @@ app.put("/api/users/:id", async (req, res) => {
   }
 });
 
-// ---------- MESSAGES / CHAT ----------
-
-// Get all messages
+// MESSAGES
 app.get("/api/messages", async (req, res) => {
   try {
     const msgs = await Message.find().lean();
@@ -235,7 +215,6 @@ app.get("/api/messages", async (req, res) => {
   }
 });
 
-// Send message
 app.post("/api/messages", async (req, res) => {
   try {
     const body = req.body;
@@ -257,7 +236,6 @@ app.post("/api/messages", async (req, res) => {
   }
 });
 
-// Mark messages from sender -> receiver as read
 app.put("/api/messages/read", async (req, res) => {
   try {
     const { senderId, receiverId } = req.body;
@@ -278,11 +256,7 @@ app.put("/api/messages/read", async (req, res) => {
   }
 });
 
-// ---------- PLACEHOLDER ROUTES FOR OTHER DATA ----------
-
-// These keep your frontend fetchAll() from failing.
-// You can extend them later with full logic if you want persistence.
-
+// GROUPS / POSTS / MATERIALS
 app.get("/api/groups", async (req, res) => {
   try {
     const groups = await Group.find().lean();
@@ -313,15 +287,18 @@ app.get("/api/materials", async (req, res) => {
   }
 });
 
-// ---------- START SERVER ----------
+// ---------- START SERVER & CONNECT DB ----------
 mongoose
-  .connect(MONGO_URI)
+  .connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
   .then(() => {
     console.log("✅ MongoDB connected");
     app.listen(PORT, () => {
-      console.log(`🚀 Backend server running on http://localhost:${PORT}`);
+      console.log(`🚀 Backend server running on port ${PORT}`);
     });
   })
   .catch((err) => {
-    console.error("MongoDB connection error:", err);
+    console.error("❌ MongoDB connection error:", err);
   });
