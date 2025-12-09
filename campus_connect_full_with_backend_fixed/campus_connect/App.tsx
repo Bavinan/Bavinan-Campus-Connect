@@ -35,8 +35,7 @@ import {
   EMOJIS,
 } from "./constants";
 
-const API_BASE_URL =
-    "https://bavinan-campus-connect.onrender.com";
+const API_BASE_URL ="https://bavinan-campus-connect.onrender.com";
 
 // ---------------------- DATA CONTEXT ---------------------- //
 
