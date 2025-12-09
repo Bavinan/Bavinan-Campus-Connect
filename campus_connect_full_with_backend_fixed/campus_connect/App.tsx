@@ -2400,6 +2400,12 @@ const CreateGroupPage: React.FC = () => {
   );
 };
 
+const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault();
+  console.log("✅ handleRegister called");
+  // rest of code...
+};
+
 const RegisterUserPage: React.FC = () => {
   const { user } = useAuth();
   const { users, registerUser, updateUser } = useData();
