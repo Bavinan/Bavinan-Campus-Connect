@@ -35,7 +35,8 @@ import {
   EMOJIS,
 } from "./constants";
 
-const API_BASE_URL ="https://bavinan-campus-connect.onrender.com";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "https://bavinan-campus-connect.onrender.com";
 
 // ---------------------- DATA CONTEXT ---------------------- //
 
@@ -452,41 +453,39 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const { users } = useData(); // ✅ get users from DataContext
 
   const login = async (username: string, password: string): Promise<void> => {
-    // 1) Try backend login first
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-      });
+  // 1) Try backend login first
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
 
-      if (response.ok) {
-        const loggedInUser: User = await response.json();
-        setUser(loggedInUser);
-        return;
-      }
-    } catch (err) {
-      console.warn(
-        "Backend auth not available or failed, using local users.",
-        err
-      );
+    if (response.ok) {
+      const loggedInUser: User = await response.json();
+      setUser(loggedInUser);
+      return;
     }
+  } catch (err) {
+    console.warn("Backend auth not available or failed, using local users.", err);
+  }
 
-    // 2) Fallback to users loaded/registered in the app (from DataProvider)
-    let localUser =
-      users.find(
-        (u) => u.username === username && (u as any).password === password
-      ) ||
-      MOCK_USERS.find(
-        (u) => u.username === username && (u as any).password === password
-      );
+  // 2) Fallback to users loaded/registered in the app (from DataProvider)
+  let localUser =
+    users.find(
+      (u) => u.username === username && (u as any).password === password
+    ) ||
+    MOCK_USERS.find(
+      (u) => u.username === username && (u as any).password === password
+    );
 
-    if (!localUser) {
-      throw new Error("Invalid username or password.");
-    }
+  if (!localUser) {
+    throw new Error("Invalid username or password.");
+  }
 
-    setUser(localUser);
-  };
+  setUser(localUser);
+};
+
 
   const logout = () => setUser(null);
 

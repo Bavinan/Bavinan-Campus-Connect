@@ -24,8 +24,24 @@ export const EMOJIS = ['😀', '😂', '😍', '👍', '👎', '🎉', '🔥', '
 
 // CLEAN STATE: ONLY ADMIN EXISTS
 export const MOCK_USERS: User[] = [
-    { id: 1, username: 'Admin', firstName: 'Admin', lastName: 'User', email: 'admin@campus.com', password: '10032002', role: Role.ADMIN, isActive: true, avatar: '', department: 'Administration' },
+  {
+    id: 1,
+    username: "Admin",
+    firstName: "Admin",
+    lastName: "User",
+    email: "admin@campus.com",
+    // 🔽 add this line
+    password: "10032002",
+    role: Role.ADMIN,
+    department: "CSE",
+    year: "Final",
+    section: "A",
+    avatar: "",
+    isActive: true,
+  },
+  // ...other users
 ];
+
 
 export const MOCK_POSTS: Post[] = [];
 
