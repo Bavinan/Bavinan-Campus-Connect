@@ -36,7 +36,8 @@ import {
 } from "./constants";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://bavinan-campus-connect.onrender.com";
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://bavinan-campus-connect.onrender.com";
 
 // ---------------------- DATA CONTEXT ---------------------- //
 
@@ -58,16 +59,21 @@ interface DataContextType {
   markMessagesAsRead: (senderId: number, receiverId: number) => void;
 
   users: User[];
-  registerUser: (userData: Omit<User, "id">) => void;
+  // now just pushes a ready user (usually from backend) into state
+  registerUser: (user: User) => void;
   updateUser: (user: User) => void;
 }
 
 const DataContext = createContext<DataContextType>(null!);
 const useData = () => useContext(DataContext);
 
-const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const DataProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
-  const [materials, setMaterials] = useState<StudyMaterial[]>(MOCK_STUDY_MATERIALS);
+  const [materials, setMaterials] = useState<StudyMaterial[]>(
+    MOCK_STUDY_MATERIALS
+  );
   const [groups, setGroups] = useState<Group[]>(MOCK_GROUPS);
   const [messages, setMessages] = useState<Message[]>(MOCK_MESSAGES);
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
@@ -188,9 +194,41 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
           setMaterials(normalizedMaterials);
         }
 
-        // Posts
-        if (postsData) {
-          setPosts(postsData);
+        // Posts – normalize backend posts to frontend Post type
+        if (postsData && usersData) {
+          const normalizedPosts: Post[] = postsData.map(
+            (p: any, index: number) => {
+              const authorUser =
+                usersData.find((u: any) => u.id === p.authorId) ||
+                usersData[0] || {
+                  id: 0,
+                  username: "Unknown",
+                  firstName: "Unknown",
+                  lastName: "",
+                  email: "",
+                  role: Role.STUDENT,
+                  avatar: "",
+                };
+
+              return {
+                id: p.id ?? Date.now() + index,
+                author: authorUser,
+                title: p.title ?? "",
+                description: p.description ?? p.content ?? "",
+                image: p.image ?? "",
+                likes: Array.isArray(p.likes) ? p.likes : [],
+                comments: Array.isArray(p.comments) ? p.comments : [],
+                savedBy: Array.isArray(p.savedBy) ? p.savedBy : [],
+                fromDate: p.fromDate ?? "",
+                toDate: p.toDate ?? "",
+                venue: p.venue ?? "",
+                timestamp: p.timestamp ?? "",
+                groupId: p.groupId ?? null,
+              } as Post;
+            }
+          );
+
+          setPosts(normalizedPosts);
         }
 
         // Messages
@@ -209,7 +247,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   // ---------- SYNC HELPERS (POST / PUT to backend) ---------- //
 
   const addPost = async (post: Post) => {
-    setPosts(prev => [...prev, post]); // optimistic
+    setPosts((prev) => [...prev, post]); // optimistic
 
     try {
       await fetch(`${API_BASE_URL}/api/posts`, {
@@ -223,7 +261,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   const updatePost = async (post: Post) => {
-    setPosts(prev => prev.map(p => (p.id === post.id ? post : p)));
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
 
     try {
       await fetch(`${API_BASE_URL}/api/posts/${post.id}`, {
@@ -237,7 +275,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   const deletePost = async (id: number) => {
-    setPosts(prev => prev.filter(p => p.id !== id));
+    setPosts((prev) => prev.filter((p) => p.id !== id));
 
     try {
       await fetch(`${API_BASE_URL}/api/posts/${id}`, {
@@ -249,7 +287,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   const addMaterial = async (material: StudyMaterial) => {
-    setMaterials(prev => [...prev, material]);
+    setMaterials((prev) => [...prev, material]);
 
     try {
       await fetch(`${API_BASE_URL}/api/materials`, {
@@ -263,7 +301,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   const addGroup = async (group: Group) => {
-    setGroups(prev => [...prev, group]);
+    setGroups((prev) => [...prev, group]);
 
     try {
       await fetch(`${API_BASE_URL}/api/groups`, {
@@ -277,7 +315,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   const updateGroup = async (group: Group) => {
-    setGroups(prev => prev.map(g => (g.id === group.id ? group : g)));
+    setGroups((prev) => prev.map((g) => (g.id === group.id ? group : g)));
 
     try {
       await fetch(`${API_BASE_URL}/api/groups/${group.id}`, {
@@ -291,7 +329,7 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   const addMessage = async (message: Message) => {
-    setMessages(prev => [...prev, message]);
+    setMessages((prev) => [...prev, message]);
 
     try {
       await fetch(`${API_BASE_URL}/api/messages`, {
@@ -306,18 +344,18 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
   const markMessagesAsRead = async (senderId: number, receiverId: number) => {
     // update UI immediately
-    setMessages(prev =>
-      prev.map(m =>
+    setMessages((prev) =>
+      prev.map((m) =>
         m.senderId === senderId && m.receiverId === receiverId
           ? { ...m, isRead: true }
           : m
       )
     );
 
-    // optional backend sync (adjust the URL to match your API)
+    // backend sync – matches index.js route: PUT /api/messages/read
     try {
-      await fetch(`${API_BASE_URL}/api/messages/mark-read`, {
-        method: "POST",
+      await fetch(`${API_BASE_URL}/api/messages/read`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ senderId, receiverId }),
       });
@@ -326,36 +364,13 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     }
   };
 
-  // ⬇️ put this inside DataProvider, with your other functions
-const registerUser = async (userData: Omit<User, "id">) => {
-  try {
-    // CALL YOUR BACKEND REGISTER ENDPOINT
-    // If your route is different (e.g. /api/users), change the URL here.
-   const res = await fetch(`${API_BASE_URL}/api/users`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(userData),
-});
-
-    if (!res.ok) {
-      //const text = await res.text();
-      console.error("Register failed:", text);
-      //throw new Error("Failed to register user on server");
-      return;
-    }
-
-    const created: User = await res.json(); // backend returns saved user
-    // Update React state with the user from DB (has correct id)
-    setUsers((prev) => [...prev, createdUser]);
-  } catch (err) {
-    console.error("Register error:", err);
-    //console.error("Error while registering user:", err);
-    //alert("Could not register user in backend. Check server console.");
-  }
-};
+  // just updates local state with an already-created user
+  const registerUser = (user: User) => {
+    setUsers((prev) => [...prev, user]);
+  };
 
   const updateUser = async (user: User) => {
-    setUsers(prev => prev.map(u => (u.id === user.id ? user : u)));
+    setUsers((prev) => prev.map((u) => (u.id === user.id ? user : u)));
 
     try {
       await fetch(`${API_BASE_URL}/api/users/${user.id}`, {
@@ -387,9 +402,7 @@ const registerUser = async (userData: Omit<User, "id">) => {
   };
 
   return (
-    <DataContext.Provider value={value}>
-      {children}
-    </DataContext.Provider>
+    <DataContext.Provider value={value}>{children}</DataContext.Provider>
   );
 };
 
@@ -404,7 +417,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>(null!);
 const useAuth = () => useContext(AuthContext);
 
-const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const { users } = useData(); // ✅ get users from DataContext
 
@@ -423,7 +438,10 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         return;
       }
     } catch (err) {
-      console.warn("Backend auth not available or failed, using local users.", err);
+      console.warn(
+        "Backend auth not available or failed, using local users.",
+        err
+      );
     }
 
     // 2) Fallback to users loaded/registered in the app (from DataProvider)
@@ -450,7 +468,6 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     </AuthContext.Provider>
   );
 };
-
 
 // ---------------------- UI HELPERS ---------------------- //
 
@@ -524,7 +541,8 @@ const UserAvatar: React.FC<{ user: User; className?: string }> = ({
     "bg-yellow-100 text-yellow-600",
     "bg-purple-100 text-purple-600",
   ];
-  const colorIndex = (user.firstName.length + user.lastName.length) % colors.length;
+  const colorIndex =
+    (user.firstName.length + user.lastName.length) % colors.length;
 
   return (
     <div
@@ -1022,7 +1040,9 @@ const PostItem: React.FC<{
           )}
           {post.venue && (
             <div className="w-full mt-2 pt-2 border-t border-slate-200">
-              <span className="font-semibold text-slate-700 block">Venue</span>
+              <span className="font-semibold text-slate-700 block">
+                Venue
+              </span>
               {post.venue}
             </div>
           )}
@@ -1057,16 +1077,13 @@ const PostItem: React.FC<{
           <div className="mt-4 pt-4 border-t border-slate-100 animate-fade-in-down">
             <div className="space-y-3 mb-4 max-h-40 overflow-y-auto">
               {commentsList.map((comment) => {
-                const username =
-                  (comment as any)?.user?.username ?? "User";
+                const username = (comment as any)?.user?.username ?? "User";
                 return (
                   <div key={comment.id} className="flex gap-2 text-sm">
                     <span className="font-bold text-slate-700">
                       {username}:
                     </span>
-                    <span className="text-slate-600">
-                      {comment.text}
-                    </span>
+                    <span className="text-slate-600">{comment.text}</span>
                   </div>
                 );
               })}
@@ -1165,9 +1182,7 @@ const HomePage: React.FC = () => {
       {isAdmin && <StatsSection />}
 
       <div className="space-y-6">
-        <h3 className="text-xl font-bold text-slate-800">
-          Recent Posts
-        </h3>
+        <h3 className="text-xl font-bold text-slate-800">Recent Posts</h3>
         {posts.length === 0 ? (
           <div className="p-10 text-center border border-dashed border-slate-300 rounded-xl text-slate-500">
             No posts yet.
@@ -1551,315 +1566,334 @@ const StudyMaterialPage: React.FC = () => {
 };
 
 const ChatPage: React.FC = () => {
-    const { user } = useAuth();
-    const { users, messages, addMessage, markMessagesAsRead } = useData();
-    const [activeChatUserId, setActiveChatUserId] = useState<number | null>(null);
-    const [newMessage, setNewMessage] = useState('');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const { users, messages, addMessage, markMessagesAsRead } = useData();
+  const [activeChatUserId, setActiveChatUserId] = useState<number | null>(null);
+  const [newMessage, setNewMessage] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const activeUsers = users.filter(u => u.isActive && u.id !== user!.id);
-    const filteredUsers = activeUsers.filter(u =>
-        `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchTerm.toLowerCase())
+  const activeUsers = users.filter((u) => u.isActive && u.id !== user!.id);
+  const filteredUsers = activeUsers.filter((u) =>
+    `${u.firstName} ${u.lastName}`
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase())
+  );
+
+  const getLastMessageTimestamp = (userId: number) => {
+    const userMessages = messages.filter(
+      (m) =>
+        (m.senderId === userId && m.receiverId === user!.id) ||
+        (m.senderId === user!.id && m.receiverId === userId)
+    );
+    if (userMessages.length === 0) return 0;
+    return userMessages[userMessages.length - 1].id;
+  };
+
+  const sortedUsers = [...filteredUsers].sort(
+    (a, b) => getLastMessageTimestamp(b.id) - getLastMessageTimestamp(a.id)
+  );
+
+  const activeChatUser = users.find((u) => u.id === activeChatUserId);
+  const chatMessages = messages.filter(
+    (m) =>
+      (m.senderId === user!.id && m.receiverId === activeChatUserId) ||
+      (m.senderId === activeChatUserId && m.receiverId === user!.id)
+  );
+
+  const hasUnread = (senderId: number) =>
+    messages.some(
+      (m) => !m.isRead && m.senderId === senderId && m.receiverId === user!.id
     );
 
-    const getLastMessageTimestamp = (userId: number) => {
-        const userMessages = messages.filter(m =>
-            (m.senderId === userId && m.receiverId === user!.id) ||
-            (m.senderId === user!.id && m.receiverId === userId)
-        );
-        if (userMessages.length === 0) return 0;
-        return userMessages[userMessages.length - 1].id;
+  const handleUserClick = (userId: number) => {
+    setActiveChatUserId(userId);
+    markMessagesAsRead(userId, user!.id);
+  };
+
+  // when viewing a conversation and new messages arrive, mark them as read
+  useEffect(() => {
+    if (!user || !activeChatUserId) return;
+
+    const unreadFromActive = messages.some(
+      (m) =>
+        !m.isRead &&
+        m.senderId === activeChatUserId &&
+        m.receiverId === user.id
+    );
+
+    if (unreadFromActive) {
+      markMessagesAsRead(activeChatUserId, user.id);
+    }
+  }, [messages, activeChatUserId, user, markMessagesAsRead]);
+
+  const handleSendMessage = () => {
+    if (!newMessage.trim() || !activeChatUser) return;
+    const msg: Message = {
+      id: Date.now(),
+      senderId: user!.id,
+      receiverId: activeChatUser.id,
+      text: newMessage,
+      timestamp: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      isRead: false,
     };
+    addMessage(msg);
+    setNewMessage("");
+    setShowEmojiPicker(false);
+  };
 
-    const sortedUsers = [...filteredUsers].sort(
-        (a, b) => getLastMessageTimestamp(b.id) - getLastMessageTimestamp(a.id)
-    );
+  const handleEmojiClick = (emoji: string) => {
+    setNewMessage((prev) => prev + emoji);
+    setShowEmojiPicker(false);
+  };
 
-    const activeChatUser = users.find(u => u.id === activeChatUserId);
-    const chatMessages = messages.filter(m =>
-        (m.senderId === user!.id && m.receiverId === activeChatUserId) ||
-        (m.senderId === activeChatUserId && m.receiverId === user!.id)
-    );
-
-    const hasUnread = (senderId: number) =>
-        messages.some(m => !m.isRead && m.senderId === senderId && m.receiverId === user!.id);
-
-    const handleUserClick = (userId: number) => {
-        setActiveChatUserId(userId);
-        markMessagesAsRead(userId, user!.id);
-    };
-
-    // 🔔 When viewing a conversation and new messages arrive from that user,
-    // mark them as read so notification dots disappear.
-    useEffect(() => {
-        if (!user || !activeChatUserId) return;
-
-        const unreadFromActive = messages.some(
-            m => !m.isRead && m.senderId === activeChatUserId && m.receiverId === user.id
-        );
-
-        if (unreadFromActive) {
-            markMessagesAsRead(activeChatUserId, user.id);
-        }
-    }, [messages, activeChatUserId, user, markMessagesAsRead]);
-
-    const handleSendMessage = () => {
-        if (!newMessage.trim() || !activeChatUser) return;
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0] && activeChatUser) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
         const msg: Message = {
-            id: Date.now(),
-            senderId: user!.id,
-            receiverId: activeChatUser.id,
-            text: newMessage,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isRead: false
+          id: Date.now(),
+          senderId: user!.id,
+          receiverId: activeChatUser.id,
+          text: "",
+          file: {
+            name: file.name,
+            type: file.name.split(".").pop()?.toUpperCase() || "FILE",
+            url: reader.result as string,
+            mimeType: file.type,
+          },
+          timestamp: new Date().toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          isRead: false,
         };
         addMessage(msg);
-        setNewMessage('');
-        setShowEmojiPicker(false);
-    };
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
-    const handleEmojiClick = (emoji: string) => {
-        setNewMessage(prev => prev + emoji);
-        setShowEmojiPicker(false);
-    };
-
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0] && activeChatUser) {
-            const file = e.target.files[0];
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const msg: Message = {
-                    id: Date.now(),
-                    senderId: user!.id,
-                    receiverId: activeChatUser.id,
-                    text: '',
-                    file: {
-                        name: file.name,
-                        type: file.name.split('.').pop()?.toUpperCase() || 'FILE',
-                        url: reader.result as string,
-                        mimeType: file.type
-                    },
-                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                    isRead: false
-                };
-                addMessage(msg);
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    return (
-        <div className="h-screen flex flex-col bg-white">
-            <div className="px-8 pt-8 pb-4 border-b border-slate-100">
-                <PageHeader title="Chat" subtitle="Connect with your classmates" />
+  return (
+    <div className="h-screen flex flex-col bg-white">
+      <div className="px-8 pt-8 pb-4 border-b border-slate-100">
+        <PageHeader title="Chat" subtitle="Connect with your classmates" />
+      </div>
+      <div className="flex-grow flex overflow-hidden max-w-7xl mx-auto w-full px-8 pb-8 gap-6">
+        <Card className="w-1/3 flex flex-col border-slate-200 shadow-lg h-full">
+          <div className="p-4 border-b border-slate-100">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+              />
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+                className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+                />
+              </svg>
             </div>
-            <div className="flex-grow flex overflow-hidden max-w-7xl mx-auto w-full px-8 pb-8 gap-6">
-                <Card className="w-1/3 flex flex-col border-slate-200 shadow-lg h-full">
-                    <div className="p-4 border-b border-slate-100">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                placeholder="Search users..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-violet-500/20 transition-all"
+          </div>
+          <ul className="overflow-y-auto flex-grow p-2 space-y-1">
+            {sortedUsers.map((u) => (
+              <li
+                key={u.id}
+                onClick={() => handleUserClick(u.id)}
+                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                  activeChatUserId === u.id
+                    ? "bg-violet-50 border border-violet-100"
+                    : "hover:bg-slate-50 border border-transparent"
+                }`}
+              >
+                <div className="relative">
+                  <UserAvatar user={u} className="w-12 h-12 text-lg" />
+                  {hasUnread(u.id) && (
+                    <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse" />
+                  )}
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
+                </div>
+                <div className="flex-grow min-w-0">
+                  <div className="flex justify-between items-baseline">
+                    <p className="font-bold text-slate-800 truncate">
+                      {u.firstName} {u.lastName}
+                    </p>
+                    <span className="text-xs text-slate-400">Online</span>
+                  </div>
+                  <p className="text-xs text-slate-500 truncate">{u.role}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        <Card className="w-2/3 flex flex-col border-slate-200 shadow-lg h-full">
+          {activeChatUser ? (
+            <>
+              <div className="p-4 border-b border-slate-100 flex items-center gap-4 bg-white">
+                <div className="relative">
+                  <UserAvatar user={activeChatUser} />
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800">
+                    {activeChatUser.firstName} {activeChatUser.lastName}
+                  </h3>
+                  <p className="text-xs text-green-600 font-medium">Online</p>
+                </div>
+              </div>
+              <div className="flex-grow p-6 overflow-y-auto space-y-6 bg-slate-50/50">
+                {chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${
+                      msg.senderId === user!.id
+                        ? "justify-end"
+                        : "justify-start"
+                    }`}
+                  >
+                    <div
+                      className={`max-w-md flex flex-col ${
+                        msg.senderId === user!.id
+                          ? "items-end"
+                          : "items-start"
+                      }`}
+                    >
+                      {msg.text && (
+                        <div
+                          className={`px-5 py-3 rounded-2xl shadow-sm text-sm ${
+                            msg.senderId === user!.id
+                              ? "bg-violet-600 text-white rounded-tr-none"
+                              : "bg-white text-slate-700 border border-slate-100 rounded-tl-none"
+                          }`}
+                        >
+                          <p>{msg.text}</p>
+                        </div>
+                      )}
+                      {msg.file && (
+                        <div className="mt-1">
+                          {msg.file.mimeType.startsWith("image/") ? (
+                            <img
+                              src={msg.file.url}
+                              alt="attachment"
+                              className="max-w-[200px] rounded-lg shadow-sm border border-slate-200"
                             />
-                            <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={1.5}
-                                stroke="currentColor"
-                                className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                            >
-                                <path
+                          ) : (
+                            <div className="px-4 py-3 rounded-lg shadow-sm bg-white text-slate-700 border border-slate-100 flex items-center gap-3">
+                              <div className="p-2 bg-slate-100 rounded-lg text-slate-500">
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  strokeWidth={2}
+                                  stroke="currentColor"
+                                  className="w-5 h-5"
+                                >
+                                  <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-                                />
-                            </svg>
+                                    d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 6.375L8.545 17.33a1.5 1.5 0 01-2.121-2.121L14.25 7.5"
+                                  />
+                                </svg>
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm underline decoration-slate-300 underline-offset-2">
+                                  {msg.file.name}
+                                </p>
+                                <p className="text-xs text-slate-400">
+                                  {msg.file.type}
+                                </p>
+                              </div>
+                            </div>
+                          )}
                         </div>
+                      )}
+                      <span className="text-[10px] text-slate-400 mt-1 px-1">
+                        {msg.timestamp}
+                      </span>
                     </div>
-                    <ul className="overflow-y-auto flex-grow p-2 space-y-1">
-                        {sortedUsers.map(u => (
-                            <li
-                                key={u.id}
-                                onClick={() => handleUserClick(u.id)}
-                                className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
-                                    activeChatUserId === u.id
-                                        ? 'bg-violet-50 border border-violet-100'
-                                        : 'hover:bg-slate-50 border border-transparent'
-                                }`}
-                            >
-                                <div className="relative">
-                                    <UserAvatar user={u} className="w-12 h-12 text-lg" />
-                                    {hasUnread(u.id) && (
-                                        <div className="absolute top-0 right-0 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse" />
-                                    )}
-                                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
-                                </div>
-                                <div className="flex-grow min-w-0">
-                                    <div className="flex justify-between items-baseline">
-                                        <p className="font-bold text-slate-800 truncate">
-                                            {u.firstName} {u.lastName}
-                                        </p>
-                                        <span className="text-xs text-slate-400">Online</span>
-                                    </div>
-                                    <p className="text-xs text-slate-500 truncate">{u.role}</p>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </Card>
-
-                <Card className="w-2/3 flex flex-col border-slate-200 shadow-lg h-full">
-                    {activeChatUser ? (
-                        <>
-                            <div className="p-4 border-b border-slate-100 flex items-center gap-4 bg-white">
-                                <div className="relative">
-                                    <UserAvatar user={activeChatUser} />
-                                    <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
-                                </div>
-                                <div>
-                                    <h3 className="font-bold text-slate-800">
-                                        {activeChatUser.firstName} {activeChatUser.lastName}
-                                    </h3>
-                                    <p className="text-xs text-green-600 font-medium">Online</p>
-                                </div>
-                            </div>
-                            <div className="flex-grow p-6 overflow-y-auto space-y-6 bg-slate-50/50">
-                                {chatMessages.map(msg => (
-                                    <div
-                                        key={msg.id}
-                                        className={`flex ${
-                                            msg.senderId === user!.id ? 'justify-end' : 'justify-start'
-                                        }`}
-                                    >
-                                        <div
-                                            className={`max-w-md flex flex-col ${
-                                                msg.senderId === user!.id ? 'items-end' : 'items-start'
-                                            }`}
-                                        >
-                                            {msg.text && (
-                                                <div
-                                                    className={`px-5 py-3 rounded-2xl shadow-sm text-sm ${
-                                                        msg.senderId === user!.id
-                                                            ? 'bg-violet-600 text-white rounded-tr-none'
-                                                            : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'
-                                                    }`}
-                                                >
-                                                    <p>{msg.text}</p>
-                                                </div>
-                                            )}
-                                            {msg.file && (
-                                                <div className="mt-1">
-                                                    {msg.file.mimeType.startsWith('image/') ? (
-                                                        <img
-                                                            src={msg.file.url}
-                                                            alt="attachment"
-                                                            className="max-w-[200px] rounded-lg shadow-sm border border-slate-200"
-                                                        />
-                                                    ) : (
-                                                        <div className="px-4 py-3 rounded-lg shadow-sm bg-white text-slate-700 border border-slate-100 flex items-center gap-3">
-                                                            <div className="p-2 bg-slate-100 rounded-lg text-slate-500">
-                                                                <svg
-                                                                    xmlns="http://www.w3.org/2000/svg"
-                                                                    fill="none"
-                                                                    viewBox="0 0 24 24"
-                                                                    strokeWidth={2}
-                                                                    stroke="currentColor"
-                                                                    className="w-5 h-5"
-                                                                >
-                                                                    <path
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 6.375L8.545 17.33a1.5 1.5 0 01-2.121-2.121L14.25 7.5"
-                                                                    />
-                                                                </svg>
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-medium text-sm underline decoration-slate-300 underline-offset-2">
-                                                                    {msg.file.name}
-                                                                </p>
-                                                                <p className="text-xs text-slate-400">{msg.file.type}</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                            <span className="text-[10px] text-slate-400 mt-1 px-1">
-                                                {msg.timestamp}
-                                            </span>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="p-4 bg-white border-t border-slate-100 relative">
-                                {showEmojiPicker && (
-                                    <div className="absolute bottom-20 left-12 bg-white border border-slate-200 shadow-xl rounded-xl p-3 grid grid-cols-5 gap-2 w-64 h-40 overflow-y-auto">
-                                        {EMOJIS.map(emoji => (
-                                            <button
-                                                key={emoji}
-                                                onClick={() => handleEmojiClick(emoji)}
-                                                className="text-2xl hover:bg-slate-50 rounded p-1"
-                                            >
-                                                {emoji}
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                                <div className="flex items-center gap-3">
-                                    <input
-                                        type="file"
-                                        ref={fileInputRef}
-                                        className="hidden"
-                                        onChange={handleFileSelect}
-                                    />
-                                    <button
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"
-                                    >
-                                        {ICONS.attach}
-                                    </button>
-                                    <button
-                                        onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                        className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"
-                                    >
-                                        {ICONS.smile}
-                                    </button>
-                                    <input
-                                        type="text"
-                                        value={newMessage}
-                                        onChange={e => setNewMessage(e.target.value)}
-                                        onKeyPress={e => e.key === 'Enter' && handleSendMessage()}
-                                        placeholder="Type a message..."
-                                        className="flex-grow px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all"
-                                    />
-                                    <button
-                                        onClick={handleSendMessage}
-                                        className="p-3 bg-violet-600 text-white rounded-full hover:bg-violet-700 shadow-md shadow-violet-200 transition-all"
-                                    >
-                                        {ICONS.send}
-                                    </button>
-                                </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-50/50">
-                            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-300">
-                                {ICONS.chat}
-                            </div>
-                            <p>Select a user to start chatting</p>
-                        </div>
-                    )}
-                </Card>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 bg-white border-t border-slate-100 relative">
+                {showEmojiPicker && (
+                  <div className="absolute bottom-20 left-12 bg-white border border-slate-200 shadow-xl rounded-xl p-3 grid grid-cols-5 gap-2 w-64 h-40 overflow-y-auto">
+                    {EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => handleEmojiClick(emoji)}
+                        className="text-2xl hover:bg-slate-50 rounded p-1"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    onChange={handleFileSelect}
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"
+                  >
+                    {ICONS.attach}
+                  </button>
+                  <button
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors"
+                  >
+                    {ICONS.smile}
+                  </button>
+                  <input
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+                    placeholder="Type a message..."
+                    className="flex-grow px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-violet-500/20 focus:bg-white transition-all"
+                  />
+                  <button
+                    onClick={handleSendMessage}
+                    className="p-3 bg-violet-600 text-white rounded-full hover:bg-violet-700 shadow-md shadow-violet-200 transition-all"
+                  >
+                    {ICONS.send}
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-full text-slate-400 bg-slate-50/50">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-300">
+                {ICONS.chat}
+              </div>
+              <p>Select a user to start chatting</p>
             </div>
-        </div>
-    );
+          )}
+        </Card>
+      </div>
+    </div>
+  );
 };
-
 
 const GroupDetailPage: React.FC = () => {
   const { user } = useAuth();
@@ -1918,10 +1952,8 @@ const GroupDetailPage: React.FC = () => {
       timestamp: new Date().toISOString(),
     } as any;
 
-    // Save in global posts state and backend
     addPost(newPost);
 
-    // Also store inside this group's posts so Group Feed shows it
     const updatedGroup: Group = {
       ...group,
       posts: [...group.posts, newPost],
@@ -2034,9 +2066,7 @@ const GroupDetailPage: React.FC = () => {
         </Card>
       )}
 
-      <h3 className="text-lg font-bold text-slate-800 mb-4">
-        Group Feed
-      </h3>
+      <h3 className="text-lg font-bold text-slate-800 mb-4">Group Feed</h3>
       {group.posts.length === 0 ? (
         <div className="py-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
           <p className="text-slate-500">No posts in this group yet.</p>
@@ -2366,60 +2396,57 @@ const RegisterUserPage: React.FC = () => {
     }
   };
 
-const handleRegister = async (e: React.FormEvent) => {
-  e.preventDefault();
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  if (!username || !password || !email) {
-    alert("Username, email and password are required.");
-    return;
-  }
-
-  try {
-    // Call backend
-    const res = await fetch(`${API_BASE_URL}/api/users`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username,
-        firstName,
-        lastName,
-        email,
-        password,
-        role,
-        department,
-        avatar: avatarFile,
-        isActive: true,
-      }),
-    });
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      console.error("Backend /api/users error:", res.status, errText);
-      throw new Error("Backend returned " + res.status);
+    if (!username || !password || !email) {
+      alert("Username, email and password are required.");
+      return;
     }
 
-    const createdUser: User = await res.json();
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username,
+          firstName,
+          lastName,
+          email,
+          password,
+          role,
+          department,
+          avatar: avatarFile,
+          isActive: true,
+        }),
+      });
 
-    // also update React state so the list updates instantly
-    registerUser(createdUser);
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        console.error("Backend /api/users error:", res.status, errText);
+        throw new Error("Backend returned " + res.status);
+      }
 
-    alert("User registered successfully");
+      const createdUser: User = await res.json();
 
-    // reset form
-    setFirstName("");
-    setLastName("");
-    setUsername("");
-    setEmail("");
-    setPassword("");
-    setDepartment("");
-    setAvatarFile("");
-    setAvatarName("");
-  } catch (error) {
-    //console.error("Register user frontend error:", error);
-    //alert("Could not register user in backend. Check server console.");
-  }
-};
+      // update React state
+      registerUser(createdUser);
 
+      alert("User registered successfully");
+
+      setFirstName("");
+      setLastName("");
+      setUsername("");
+      setEmail("");
+      setPassword("");
+      setDepartment("");
+      setAvatarFile("");
+      setAvatarName("");
+    } catch (error) {
+      console.error("Register user frontend error:", error);
+      alert("Could not register user in backend. Check server logs.");
+    }
+  };
 
   const toggleUserStatus = (u: User) => {
     if (u.id === user?.id) return;
@@ -2577,7 +2604,6 @@ const Dashboard: React.FC = () => {
       <Sidebar />
       <main className="flex-grow bg-white overflow-y-auto h-screen">
         <Routes>
-          {/* index route -> /app */}
           <Route index element={<HomePage />} />
           <Route path="home" element={<HomePage />} />
           <Route path="posts" element={<PostPage />} />
@@ -2605,9 +2631,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<GetStartedPage />} />
             <Route path="/login" element={<LoginPage />} />
-            {/* All app pages under /app/* use Dashboard layout */}
             <Route path="/app/*" element={<Dashboard />} />
-            {/* fallback to landing page */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </HashRouter>
