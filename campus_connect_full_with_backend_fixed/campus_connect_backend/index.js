@@ -432,13 +432,48 @@ app.post("/api/materials", async (req, res) => {
 
 // ---------- START SERVER & CONNECT DB ----------
 
+// Ensure default Admin user exists
+async function ensureAdminUser() {
+  try {
+    const existing = await User.findOne({ username: "Admin" }).lean();
+
+    if (!existing) {
+      const adminUser = new User({
+        id: 1,
+        username: "Admin",
+        firstName: "Default",
+        lastName: "Admin",
+        email: "admin@campus.com",
+        password: "10032002", // same as your frontend default login
+        role: "Admin",
+        department: "Administration",
+        year: "",
+        section: "",
+        avatar: "",
+        isActive: true,
+      });
+
+      await adminUser.save();
+      console.log("✅ Seeded default Admin user");
+    } else {
+      console.log("ℹ️ Admin user already exists");
+    }
+  } catch (err) {
+    console.error("❌ Error ensuring Admin user:", err);
+  }
+}
+
 mongoose
   .connect(MONGO_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
-  .then(() => {
+  .then(async () => {
     console.log("✅ MongoDB connected");
+
+    // Make sure Admin user exists
+    await ensureAdminUser();
+
     app.listen(PORT, () => {
       console.log(`🚀 Backend server running on port ${PORT}`);
     });
@@ -446,3 +481,4 @@ mongoose
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
   });
+
