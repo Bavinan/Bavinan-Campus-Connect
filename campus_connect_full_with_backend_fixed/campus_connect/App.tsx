@@ -36,8 +36,7 @@ import {
 } from "./constants";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://bavinam-campus-connect.onrender.com";
-
+  import.meta.env.VITE_API_BASE_URL || "https://bavinan-campus-connect.onrender.com";
 
 // ---------------------- DATA CONTEXT ---------------------- //
 

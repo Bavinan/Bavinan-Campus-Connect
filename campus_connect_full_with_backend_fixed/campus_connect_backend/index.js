@@ -16,7 +16,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:3000",
-      "https://bavinan-campus-connect.vercel.app"
+      "http://localhost:5173",
+      "https://bavinan-campus-connect.vercel.app",
     ],
     credentials: true,
   })
@@ -34,7 +35,7 @@ const userSchema = new mongoose.Schema(
     firstName: String,
     lastName: String,
     email: { type: String, unique: true },
-    password: String, // plain for now (matches your existing data)
+    password: String, // plain text for now (matches your existing data)
     role: String,
     department: String,
     year: String,
@@ -45,6 +46,7 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Messages
 const messageSchema = new mongoose.Schema(
   {
     id: { type: Number, unique: true },
@@ -63,6 +65,7 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Groups
 const groupSchema = new mongoose.Schema(
   {
     id: { type: Number, unique: true },
@@ -71,37 +74,39 @@ const groupSchema = new mongoose.Schema(
     description: String,
     privacy: String,
     maxMembers: Number,
-    mentorId: Number,
-    posts: { type: Array, default: [] },
+    mentorId: Number, // numeric id of mentor user
+    posts: { type: Array, default: [] }, // we store full post objects or ids
     membersCount: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
 
+// Posts
 const postSchema = new mongoose.Schema(
   {
     id: { type: Number, unique: true },
-    authorId: Number,
+    authorId: Number, // numeric id of User
     title: String,
     description: String,
     image: String,
     fromDate: String,
     toDate: String,
     venue: String,
-    likes: { type: [Number], default: [] },
+    likes: { type: [Number], default: [] }, // user ids
     comments: { type: Array, default: [] },
     savedBy: { type: [Number], default: [] },
-    groupId: Number,
+    groupId: Number, // optional: if post belongs to a group
     timestamp: String,
   },
   { timestamps: true }
 );
 
+// Study Materials
 const materialSchema = new mongoose.Schema(
   {
     id: { type: Number, unique: true },
-    uploaderId: Number,
+    uploaderId: Number, // numeric id of User
     title: String,
     subject: String,
     description: String,
@@ -129,7 +134,8 @@ app.get("/", (req, res) => {
   res.send("Campus Connect backend is running ✅");
 });
 
-// AUTH LOGIN
+// ---------- AUTH ----------
+
 app.post("/api/auth/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -151,7 +157,8 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
-// USERS
+// ---------- USERS ----------
+
 app.get("/api/users", async (req, res) => {
   try {
     const users = await User.find().lean();
@@ -208,7 +215,8 @@ app.put("/api/users/:id", async (req, res) => {
   }
 });
 
-// MESSAGES
+// ---------- MESSAGES ----------
+
 app.get("/api/messages", async (req, res) => {
   try {
     const msgs = await Message.find().lean();
@@ -240,7 +248,8 @@ app.post("/api/messages", async (req, res) => {
   }
 });
 
-app.put("/api/messages/read", async (req, res) => {
+// This must match frontend: /api/messages/mark-read
+app.post("/api/messages/mark-read", async (req, res) => {
   try {
     const { senderId, receiverId } = req.body;
 
@@ -260,7 +269,8 @@ app.put("/api/messages/read", async (req, res) => {
   }
 });
 
-// GROUPS / POSTS / MATERIALS
+// ---------- GROUPS ----------
+
 app.get("/api/groups", async (req, res) => {
   try {
     const groups = await Group.find().lean();
@@ -270,6 +280,50 @@ app.get("/api/groups", async (req, res) => {
     res.status(500).json({ message: "Failed to fetch groups" });
   }
 });
+
+app.post("/api/groups", async (req, res) => {
+  try {
+    const body = req.body;
+    const group = new Group({
+      id: body.id || Date.now(),
+      name: body.name,
+      category: body.category,
+      description: body.description,
+      privacy: body.privacy || "Public",
+      maxMembers: body.maxMembers || 50,
+      mentorId: body.mentorId || body.mentor?.id || 0,
+      posts: Array.isArray(body.posts) ? body.posts : [],
+      membersCount: body.membersCount || 0,
+      isActive: typeof body.isActive === "boolean" ? body.isActive : true,
+    });
+
+    await group.save();
+    res.status(201).json(group.toObject());
+  } catch (err) {
+    console.error("Create group error:", err);
+    res.status(500).json({ message: "Failed to create group" });
+  }
+});
+
+app.put("/api/groups/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const updated = await Group.findOneAndUpdate({ id }, req.body, {
+      new: true,
+    }).lean();
+
+    if (!updated) {
+      return res.status(404).json({ message: "Group not found" });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    console.error("Update group error:", err);
+    res.status(500).json({ message: "Failed to update group" });
+  }
+});
+
+// ---------- POSTS ----------
 
 app.get("/api/posts", async (req, res) => {
   try {
@@ -281,6 +335,65 @@ app.get("/api/posts", async (req, res) => {
   }
 });
 
+app.post("/api/posts", async (req, res) => {
+  try {
+    const body = req.body;
+
+    const post = new Post({
+      id: body.id || Date.now(),
+      authorId: body.authorId || body.author?.id || 0,
+      title: body.title || "",
+      description: body.description || "",
+      image: body.image || "",
+      fromDate: body.fromDate || "",
+      toDate: body.toDate || "",
+      venue: body.venue || "",
+      likes: Array.isArray(body.likes) ? body.likes : [],
+      comments: Array.isArray(body.comments) ? body.comments : [],
+      savedBy: Array.isArray(body.savedBy) ? body.savedBy : [],
+      groupId: body.groupId || null,
+      timestamp: body.timestamp || new Date().toISOString(),
+    });
+
+    await post.save();
+    res.status(201).json(post.toObject());
+  } catch (err) {
+    console.error("Create post error:", err);
+    res.status(500).json({ message: "Failed to create post" });
+  }
+});
+
+app.put("/api/posts/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const updated = await Post.findOneAndUpdate({ id }, req.body, {
+      new: true,
+    }).lean();
+
+    if (!updated) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    res.json(updated);
+  } catch (err) {
+    console.error("Update post error:", err);
+    res.status(500).json({ message: "Failed to update post" });
+  }
+});
+
+app.delete("/api/posts/:id", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    await Post.deleteOne({ id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Delete post error:", err);
+    res.status(500).json({ message: "Failed to delete post" });
+  }
+});
+
+// ---------- STUDY MATERIALS ----------
+
 app.get("/api/materials", async (req, res) => {
   try {
     const materials = await StudyMaterial.find().lean();
@@ -291,7 +404,34 @@ app.get("/api/materials", async (req, res) => {
   }
 });
 
+app.post("/api/materials", async (req, res) => {
+  try {
+    const body = req.body;
+    const material = new StudyMaterial({
+      id: body.id || Date.now(),
+      uploaderId: body.uploaderId || body.uploader?.id || 0,
+      title: body.title || "",
+      subject: body.subject || "",
+      description: body.description || "",
+      fileName: body.fileName || "",
+      fileType: body.fileType || "PDF",
+      url: body.url || "",
+      likes: Array.isArray(body.likes) ? body.likes : [],
+      comments: Array.isArray(body.comments) ? body.comments : [],
+      savedBy: Array.isArray(body.savedBy) ? body.savedBy : [],
+      downloads: body.downloads || 0,
+    });
+
+    await material.save();
+    res.status(201).json(material.toObject());
+  } catch (err) {
+    console.error("Create material error:", err);
+    res.status(500).json({ message: "Failed to create material" });
+  }
+});
+
 // ---------- START SERVER & CONNECT DB ----------
+
 mongoose
   .connect(MONGO_URI, {
     useNewUrlParser: true,
