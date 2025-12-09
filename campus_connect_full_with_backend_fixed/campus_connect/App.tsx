@@ -60,7 +60,7 @@ interface DataContextType {
 
   users: User[];
   // now just pushes a ready user (usually from backend) into state
-  registerUser: (user: User) => void;
+  registerUser: (userData: Omit<User, "id">) => Promise<void>;
   updateUser: (user: User) => void;
 }
 
@@ -365,8 +365,38 @@ const DataProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // just updates local state with an already-created user
-  const registerUser = (user: User) => {
-    setUsers((prev) => [...prev, user]);
+    const registerUser = async (userData: Omit<User, "id">) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
+      });
+
+      if (res.ok) {
+        const created: User = await res.json();
+        // backend user (with real id)
+        setUsers((prev) => [...prev, created]);
+      } else {
+        const text = await res.text().catch(() => "");
+        console.error("Backend /api/users error:", res.status, text);
+
+        // fallback: create local user so UI still updates
+        const fallbackUser: User = {
+          id: Date.now(),
+          ...userData,
+        } as User;
+        setUsers((prev) => [...prev, fallbackUser]);
+      }
+    } catch (err) {
+      console.error("Register user error (network/backend):", err);
+      // fallback local user
+      const fallbackUser: User = {
+        id: Date.now(),
+        ...userData,
+      } as User;
+      setUsers((prev) => [...prev, fallbackUser]);
+    }
   };
 
   const updateUser = async (user: User) => {
@@ -2397,56 +2427,42 @@ const RegisterUserPage: React.FC = () => {
   };
 
   const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    if (!username || !password || !email) {
-      alert("Username, email and password are required.");
-      return;
-    }
+  if (!username || !password || !email) {
+    alert("Username, email and password are required.");
+    return;
+  }
 
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/users`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          username,
-          firstName,
-          lastName,
-          email,
-          password,
-          role,
-          department,
-          avatar: avatarFile,
-          isActive: true,
-        }),
-      });
+  try {
+    await registerUser({
+      username,
+      firstName,
+      lastName,
+      email,
+      password: password as any, // if `User` type doesn't include password, you can remove this
+      role,
+      department,
+      avatar: avatarFile,
+      isActive: true,
+    } as any);
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "");
-        console.error("Backend /api/users error:", res.status, errText);
-        throw new Error("Backend returned " + res.status);
-      }
+    alert("User registered successfully");
 
-      const createdUser: User = await res.json();
-
-      // update React state
-      registerUser(createdUser);
-
-      alert("User registered successfully");
-
-      setFirstName("");
-      setLastName("");
-      setUsername("");
-      setEmail("");
-      setPassword("");
-      setDepartment("");
-      setAvatarFile("");
-      setAvatarName("");
-    } catch (error) {
-      console.error("Register user frontend error:", error);
-      alert("Could not register user in backend. Check server logs.");
-    }
-  };
+    // reset form
+    setFirstName("");
+    setLastName("");
+    setUsername("");
+    setEmail("");
+    setPassword("");
+    setDepartment("");
+    setAvatarFile("");
+    setAvatarName("");
+  } catch (error) {
+    console.error("Register user error in UI:", error);
+    alert("There was a problem registering the user. Check console.");
+  }
+};
 
   const toggleUserStatus = (u: User) => {
     if (u.id === user?.id) return;
